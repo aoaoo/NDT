@@ -12,7 +12,7 @@ print(pipesel(3))
 
 #Check extra infos (modifications because of high distances)
 #The pipe diameter between the outdoor unit and the first branch
-def ou (si, ty): #size and type of the outdoor unit
+def ou_branch (si, ty): #size and type of the outdoor unit
 	if ty == 'EP':
 		EP_dict = {
 		200: (10, 22),
@@ -81,6 +81,43 @@ def ou (si, ty): #size and type of the outdoor unit
 	else:
 		return (-1, -1)
 
+#Check extra infos (modifications because of high distances)
+#The pipe diameter between the outdoor unit and the first branch
+def branch_branch (si, ty): #size and type of the outdoor unit
+	if ty == 'EP':
+		EP_dict = {
+		200: (10, 22),
+		250: (10, 22),
+		300: (10, 28),
+		350: (12, 28),
+		400: (12, 28),
+		450: (16, 28),
+		500: (16, 28),
+		1350: (20, 42)		
+		}
+		return EP_dict[si]
+	elif ty == 'HP':
+		HP_dict = {
+		200: (12, 20),
+		250: (12, 22),
+		400: (16, 28),
+		450: (16, 28),
+		500: (16, 28)		
+		}
+		return HP_dict[si]	
+	elif ty == 'P':
+		P_dict = {
+		200: (10, 22),
+		250: (10, 22),
+		300: (10, 22),
+		1350: (20, 42)		
+		}
+		return P_dict[si]
+	else:
+		return (-1, -1)
+		
+		
+		
 import xml.etree.ElementTree as ET
 tree = ET.parse('ndtv.xml')
 root = tree.getroot()
@@ -182,13 +219,22 @@ while True:
 
 #Building the tree
 #var
-leftsize = [0] * (a+1)
-rightsize = [0] * (a+1)
+leftsize = [0] * (a + 1)
+rightsize = [0] * (a + 1)
+leaf = [0] * (a + 1)
+leftchild = [-1] * (a + 1)  #just for the branch-IU connection
+rightchild = [-1] * (a + 1) #just for the branch-IU connection
 
 i = a
 for i in range(a, -1, -1):
 	if elemtyp[i] == 'Branch':
 		size[i] = leftsize[i] + rightsize[i]
+	elif elemtyp[i] == 'Indoor':
+		leaf[parentid[i]] += 1
+		if leftchild[parentid[i]] == -1:
+			leftchild[parentid[i]] = i
+		else:
+			rightchild[parentid[i]] = i
 	if leftsize[parentid[i]] == 0:
 		leftsize[parentid[i]] = size[i]
 	else:
@@ -205,5 +251,8 @@ print(len(size))
 print('****End******')
 '''
 
-
+print(leaf)
+print(leftchild)
+print(rightchild)
 print('****End of code****')
+input()
