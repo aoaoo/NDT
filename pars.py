@@ -92,6 +92,7 @@ def iu_branch (si, ty): #size of the connected indoor unit, and the type of the 
 		15: [6, 12],
 		18: [6, 12],
 		20: [6, 12],
+		22: [6, 12],
 		25: [6, 12],
 		32: [6, 12],
 		35: [6, 12],
@@ -113,6 +114,8 @@ def iu_branch (si, ty): #size of the connected indoor unit, and the type of the 
 		15: [6, 12],
 		18: [6, 12],
 		20: [6, 12],
+		22: [6, 12],
+		25: [6, 12],
 		32: [6, 12],
 		35: [6, 12],
 		40: [6, 12],
@@ -133,6 +136,8 @@ def iu_branch (si, ty): #size of the connected indoor unit, and the type of the 
 		15: [6, 12],
 		18: [6, 12],
 		20: [6, 12],
+		22: [6, 12],
+		25: [6, 12],
 		32: [6, 12],
 		35: [6, 12],
 		40: [6, 12],
@@ -212,7 +217,7 @@ joker1 = list() #Mitsubitsi system type; P, EP, HP
 parentid = list()
 a = 0 #Where a = ID (a = NDT_ID - 1)
 
-###Valus from string###
+###Values from string###
 
 while True:
 	try:
@@ -329,7 +334,6 @@ for i in range(a, -1, -1):
 pipdia = [[]] * (a + 1) #give diameter before of the equipment
 num_join = 1 #Number of joints (int, but bool may enoug later?)
 
-
 for i in range (0, a + 1):
 	if elemtyp[i] == 'Outdoor':
 		pipdia[i] = [0, 0]
@@ -364,14 +368,9 @@ for i in range (0, a + 1):
 #summarize joints
 joint_s.append(joint[0])
 joint_num.append(1)
-print(str(len(joint_s)+1))
-print(joint_s)
-print(j)
 for i in range (1, len(joint)):
 	exist = False
 	for j in range(0, len(joint_s)):
-		print(j)
-		print("current i is: " + str(i))
 		if joint_s[j] == joint[i]:
 			joint_num[j] += 1
 			exist = True
@@ -390,6 +389,5 @@ print()
 print('****End******')
 '''
 
-print(joint)
 print(joint_s)
 print(joint_num)
