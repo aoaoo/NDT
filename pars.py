@@ -313,14 +313,11 @@ i = a
 for i in range(a, -1, -1):
 	if elemtyp[i] == 'Branch':
 		size[i] = leftsize[i] + rightsize[i]
-	elif elemtyp[i] == 'Indoor':
-		if leftchild[parentid[i]] == -1:
-			leftchild[parentid[i]] = i
-		else:
-			rightchild[parentid[i]] = i
-	if leftsize[parentid[i]] == 0:
+	if leftchild[parentid[i]] == -1:
+		leftchild[parentid[i]] = i
 		leftsize[parentid[i]] = size[i]
 	else:
+		rightchild[parentid[i]] = i
 		rightsize[parentid[i]] = size[i]
 
 ###Branch size calculating###
@@ -346,22 +343,20 @@ for i in range (0, a + 1):
 			pipdia[i] = branch_branch(size[i], joker1[0])
 		num_join += 1
 
-
 ###var
 b = 0 #Temp variable, joint ID (0::num_join-1)
-joint_g = [[]] * (num_join) #joints for gas
-joint_f = [[]] * (num_join) #joints for fluid
+joint = [[]] * (num_join*2) #joints
 
+joint[b] = [0,0,0]
+joint[b+1] = [0,0,0]
+b += 2
 if size[0] >= 400:
 	print('0th joint may need')#->output file
 for i in range (0, a + 1):
 	if elemtyp[i] == 'Branch':
-		print(i)
-		joint_f[b] = [pipdia[i][1], pipdia[leftchild[i]][1], pipdia[rightchild[i]][1]] 
-		joint_g[b] = [pipdia[i][2], pipdia[leftchild[i]][2], pipdia[rightchild[i]][1]] 
-		b += 1
-		print(i)
-	
+		for j in range (0, 2):
+			joint[b+j] = [pipdia[i][j], pipdia[leftchild[i]][j], pipdia[rightchild[i]][j]]
+		b += 2
 	
 	
 
@@ -374,11 +369,4 @@ print(len(size))
 print('****End******')
 '''
 
-print(str(leftchild[2]))
-print(joint_f)
-print(joint_g)
-print(num_join)
-print(size)
-print(pipdia)
-print(leftchild)
-print(rightchild)
+print(joint)
