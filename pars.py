@@ -8,7 +8,7 @@ print('***Amennyiben a G11-nél vagy a Mitsubishi New Design Tool v1.90 frissebb
 print('***Használat ... in progress***')
 print('***Forráskód: https://github.com/aoaoo/NDT***')
 print()
-print("***Let's see the results***")
+print("***Begin***")
 print()
 
 ###Functions###
@@ -92,6 +92,7 @@ def iu_branch (si, ty): #size of the connected indoor unit, and the type of the 
 		15: [6, 12],
 		18: [6, 12],
 		20: [6, 12],
+		25: [6, 12],
 		32: [6, 12],
 		35: [6, 12],
 		40: [6, 12],
@@ -152,7 +153,7 @@ def iu_branch (si, ty): #size of the connected indoor unit, and the type of the 
 		
 #Check extra infos (modifications because of high distances)
 #The pipe diameter between two branches
-def branch_branch (si, ty): #size of the total down-stream indoor capacity
+def branch_branch (si, ty): #size of the total down-stream indoor capacity (and the outdoor unit type)
 	if ty == 'EP':
 		if si <= 140:
 			return [10, 16]
@@ -198,7 +199,6 @@ def branch_branch (si, ty): #size of the total down-stream indoor capacity
 			return [20, 42]
 	else:
 		return [-1, -1]
-
 
 ###Import data###		
 import xml.etree.ElementTree as ET
@@ -346,7 +346,10 @@ for i in range (0, a + 1):
 ###var
 b = 0 #Temp variable, joint ID (0::num_join-1)
 joint = [[]] * (num_join*2) #joints
+joint_s = list()
+joint_num = list()
 
+#Get the joints
 joint[b] = [0,0,0]
 joint[b+1] = [0,0,0]
 b += 2
@@ -355,18 +358,38 @@ if size[0] >= 400:
 for i in range (0, a + 1):
 	if elemtyp[i] == 'Branch':
 		for j in range (0, 2):
-			joint[b+j] = [pipdia[i][j], pipdia[leftchild[i]][j], pipdia[rightchild[i]][j]]
+			joint[b+j] = sorted([pipdia[i][j], pipdia[leftchild[i]][j], pipdia[rightchild[i]][j]], reverse=True)
 		b += 2
-	
-	
 
+#summarize joints
+joint_s.append(joint[0])
+joint_num.append(1)
+print(str(len(joint_s)+1))
+print(joint_s)
+print(j)
+for i in range (1, len(joint)):
+	exist = False
+	for j in range(0, len(joint_s)):
+		print(j)
+		print("current i is: " + str(i))
+		if joint_s[j] == joint[i]:
+			joint_num[j] += 1
+			exist = True
+			break
+	if exist == True:
+		continue
+	else:
+		joint_s.append(joint[i])
+		joint_num.append(1)
+	
 print()
 print('***End***')
 print()
 '''print('****Test section start here******')
-int('200')
-print(len(size))
+
 print('****End******')
 '''
 
 print(joint)
+print(joint_s)
+print(joint_num)
