@@ -1,5 +1,6 @@
 ###Comments###
-
+#Python v3.5.0
+#openpyxl v2.5.3
 print('***Ez a kód a PUHY-HP, P és EP szériák esetében számolja össze a beltéri egységekhez szükséges jointokat (azaz a kültéri egységek összekötéséhez szükséges darabokat ehhez hozzá kell venni, ha van ilyen.***')
 print('***Jelenleg beta verzióban működik, az eredmények ellenőrzése szükséges.***')
 print('***A jelenlegi verzió nem számolja a szükséges szűkítők és az azokhoz szükséges extra csőmennyiségek mértékét. Ezzel összhangban nem a Mitsubishi szabványos elágazásait adja meg.***')
@@ -10,6 +11,10 @@ print('***Forráskód: https://github.com/aoaoo/NDT***')
 print()
 print("***Begin***")
 print()
+
+#import modules
+import string
+import re
 
 ###Functions###
 
@@ -205,20 +210,61 @@ def branch_branch (si, ty): #size of the total down-stream indoor capacity (and 
 	else:
 		return [-1, -1]
 
+###Values from string###
+def get_num (s, typ): #String and type of the expected value; need: 'import re'
+	if typ == 'float':
+		return float(re.search(r'[-]?\d+[.]?\d{0,3}', s.replace(',' , '.')).group(0))
+	elif typ == 'int':
+		return int(re.search(r'[-]?\d+', s).group(0))
+	else: #positive int
+		return int(re.search(r'\d+', s).group(0))
+
 ###Import data###		
 import xml.etree.ElementTree as ET
 tree = ET.parse('ndtv.xml')
 root = tree.getroot()
 
 ###var
-elemtyp = list() #Outdoor / Indoorunit, Branch
+elemtyp = list() #Outdoor / Indoor, Branch
 size = list() #The capacity of the units
-joker1 = list() #Mitsubitsi system type; P, EP, HP
+joker1 = list() #Random joker
 parentid = list()
+piplen = list() #Pipe length before the unit #Expect outdoor unit
+numbend	= list() #Number of bent before the unit #Expect the outdoort unit
 a = 0 #Where a = ID (a = NDT_ID - 1)
+systyp = '' #system type: P, HP, EP
+'''lengthA
+lengthB
+lengthC
+bendA
+bendB
+bendC''' #The outdoor unit typical values
 
-###Values from string###
 
+for unit in root.iter('Unit'):
+	elemtyp.append(unit.get('Model'))
+	if elemtyp[a] == 'Outdoor':
+		size.append(get_num(unit.get('ModelName'),'pint'))
+		parentid.append(0)
+		piplen.append(0)
+		numbend.append(0)
+		systyp = (re.search(r'[-][E,H]?[P]', unit.get('ModelName')).group(0)).replace('-', '')
+	elif elemtyp[a] == 'Indoor':
+		size.append(get_num(unit.get('ModelName'),'pint'))
+		parentid.append(int(unit.get('ParentUnitID')))
+		piplen.append(get_num(unit.get('PipeLength'),'float'))
+		numbend.append(get_num(unit.get('Bend'),'pint'))
+	elif elemtyp[a] == 'Branch':
+		size.append(0)
+		parentid.append(int(unit.get('ParentUnitID')))
+		piplen.append(get_num(unit.get('PipeLength'),'float'))
+		numbend.append(get_num(unit.get('Bend'),'pint'))
+	else:
+		print('Unknown device type in sequence (0;;unit): ' + str(a))#Err mess
+	a += 1
+a -= 1
+
+'''
 while True:
 	try:
 		root[0][2][a]
@@ -257,6 +303,10 @@ while True:
 				size[a] = (int(s[pos+i:pos+i+4]))
 			except ValueError:
 				continue
+		#pipelength
+		piplen.append(0.0)
+		#number of bent
+		numbend.append(0)
 		#print('The size of the found outdoor unit is: ' + str(size[a]))
 	elif s.find('Indoor') > 0:
 		elemtyp.append('Indoor')
@@ -288,6 +338,19 @@ while True:
 					size.append(int(s[pos+i:pos+i+3]))
 			except ValueError:
 				pass
+		#pipelength
+		pos = s.find('PipeLength')
+		piplen.append(0.0)
+		for i in range (1, 6):
+			try:
+				float(s[pos+14:pos+14+i].replace(",","."))
+				if piplen[a] <= float(s[pos+14:pos+14+i].replace(",",".")):
+					piplen[a] = float(s[pos+14:pos+14+i].replace(",","."))
+			except ValueError:
+				continue
+		#number of bent
+		pos = s.find('Bend')
+		print(s[pos:pos+11])
 		#print('The size of the indoor unit is: ' + str(size[a]))
 	elif s.find('Branch') > 0:
 		elemtyp.append('Branch')
@@ -303,9 +366,20 @@ while True:
 			parentid.append(int(s[pos+16:pos+18])-1)
 		except ValueError:
 			parentid.append(int((s[pos+16]))-1)
+		#pipelength
+		pos = s.find('PipeLength')
+		piplen.append(0.0)
+		for i in range (1, 6):
+			try:
+				float(s[pos+14:pos+14+i].replace(",","."))
+				if piplen[a] <= float(s[pos+14:pos+14+i].replace(",",".")):
+					piplen[a] = float(s[pos+14:pos+14+i].replace(",","."))
+			except ValueError:
+				continue
 	else:
 		print(a)
 	a += 1
+'''
 
 ###Building the tree###
 ###var
@@ -332,6 +406,19 @@ for i in range(a, -1, -1):
 
 ###var
 pipdia = [[]] * (a + 1) #give diameter before of the equipment
+pipdia_len = [0, 0, 0, 0, 0, 0, 0, 0, 0] #6, 10 12, 16, 20, 22, 28, 35, 42
+knowndia = { #known diameters to create pipdia_len vector
+		6: 0,
+		0: 0, #delete the zero value
+		10: 1,
+		12: 2,
+		16: 3,
+		20: 4,
+		22: 5,
+		28: 6,
+		35: 7,
+		42: 8
+		}
 num_join = 1 #Number of joints (int, but bool may enoug later?)
 
 for i in range (0, a + 1):
@@ -339,13 +426,18 @@ for i in range (0, a + 1):
 		pipdia[i] = [0, 0]
 		pass #later
 	elif elemtyp[i] == 'Indoor':
-		pipdia[i] = iu_branch(size[i], joker1[0])
+		pipdia[i] = iu_branch(size[i], systyp)
 	else:
 		if num_join == 1: #Not consecvent, other places the ID = 0 means OU, ID = 1 => branch
-			pipdia[i] = ou_branch(size[0], joker1[0])
+			pipdia[i] = ou_branch(size[0], systyp)
 		else:
-			pipdia[i] = branch_branch(size[i], joker1[0])
+			pipdia[i] = branch_branch(size[i], systyp)
 		num_join += 1
+
+#pipelength
+for i in range(0, a + 1):
+	pipdia_len[knowndia[pipdia[i][0]]] += piplen[i]
+	pipdia_len[knowndia[pipdia[i][1]]] += piplen[i]
 
 ###var
 b = 0 #Temp variable, joint ID (0::num_join-1)
@@ -384,10 +476,34 @@ for i in range (1, len(joint)):
 print()
 print('***End***')
 print()
-'''print('****Test section start here******')
 
-print('****End******')
+print("joints: " + str(joint_s))
+print('number of joints: ' + str(joint_num))
+print('pipe length 6, 10 12, 16, 20, 22, 28, 35, 42: ' + str(pipdia_len))
+
+print('****Test section starts here******')
+
 '''
 
-print(joint_s)
-print(joint_num)
+from openpyxl import Workbook
+wb = Workbook()
+ws = wb.active
+print('A' + str(i))
+ws.cell(row=4, column=2, value=10)
+ws['A2'] = 2
+print(ws['B2'])
+wb.save('NDT_eport.xlsx')
+
+from openpyxl import load_workbook
+wb = load_workbook(filename = 'empty_book.xlsx')
+sheet_ranges = wb['Sheet']
+print(sheet_ranges['D18'].value)'''
+
+print('****End******')
+#bent -> pipe length in the export?
+#outdoor unit joint calculate
+#calculate the special cases
+#create exőport file
+#Summarize the export files
+#Check from the NDT .xlsx export file
+#a (new)index error correction
