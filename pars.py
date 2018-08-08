@@ -4,8 +4,11 @@
 print('***Ez a kód a PUHY-HP, P és EP szériák esetében számolja össze a beltéri egységekhez szükséges jointokat (azaz a kültéri egységek összekötéséhez szükséges darabokat ehhez hozzá kell venni, ha van ilyen.***')
 print('***Jelenleg beta verzióban működik, az eredmények ellenőrzése szükséges.***')
 print('***A jelenlegi verzió nem számolja a szükséges szűkítők és az azokhoz szükséges extra csőmennyiségek mértékét. Ezzel összhangban nem a Mitsubishi szabványos elágazásait adja meg.***')
-print('***A végleges verzió esetén az eredmények ellenőrzése kimerülhet a Design Tool-ból exportálható és az innen számolt csőmennyiségek és gázrátöltés összehasonlításával.***')
+print('***A végleges verzió esetén az eredmények ellenőrzése kimerülhet a Design Tool-ból exportálható és az innen számolt csőmennyiségek összehasonlításával.***')
+print('***Az ellenőrzésnél figyelni kell, hogy a kültériek összecsövezésére szolgáló csőmennyiség nincs benne ennek a programnak a kimenetében.***')
+print('***Ezek mellett a kültériek összekötésére szolgáló csövekből a NDT jellemzően az egyik géptől érkező "gáz" csövet nem számolja.***')
 print('***Amennyiben a G11-nél vagy a Mitsubishi New Design Tool v1.90 frissebb megjelenik, úgy ellenőrizni kell a kódba égetett adatokat.***')
+print('***A program a kültéri egységek összekötéséhez szükséges csőmennyiséget és jointo(ka)t nem számítja, ezt kézzel hozzá kell adni!***')
 print('***Használat ... in progress***')
 print('***Forráskód: https://github.com/aoaoo/NDT***')
 print()
@@ -13,8 +16,10 @@ print("***Begin***")
 print()
 
 #import modules
-import string
-import re
+import string #string
+import re #regexp
+import sys #system exit
+import time #wait
 
 ###Functions###
 
@@ -88,7 +93,7 @@ def ou_branch (si, ty): #size and type of the outdoor unit
 
 
 #Check extra infos (modifications because of high distances)
-#The pipe diameter between the indoor unit and the branch
+#The pipe diameter between the indoor unit and the branch, in case of VRF indoor unit (use Miu_branch function in case of PAC-LV11)
 def iu_branch (si, ty): #size of the connected indoor unit, and the type of the system (based on the data, now this second variable negigible)
 	if ty == 'EP':
 		EP_dict = {
@@ -157,7 +162,23 @@ def iu_branch (si, ty): #size of the connected indoor unit, and the type of the 
 		}
 		return P_dict[si]
 
-		
+#The pipe diameter between the indoor unit and the branch, in case of M series indoor unit (with PAC-LV11): MSZ-SF, EF, FH and MFZ-KJ
+def Miu_branch (si): #In this case system type is not important
+	M_dict = {
+	15: [6, 10],
+	18: [6, 10],
+	20: [6, 10],
+	22: [6, 10],
+	25: [6, 10],
+	30: [6, 10],
+	40: [6, 10],
+	45: [6, 12], #unit 50, because of the size correction
+	60: [6, 16],
+	71: [10, 16],
+	80: [10, 16]
+	}
+	return M_dict[si]
+
 #Check extra infos (modifications because of high distances)
 #The pipe diameter between two branches
 def branch_branch (si, ty): #size of the total down-stream indoor capacity (and the outdoor unit type)
@@ -214,6 +235,22 @@ def get_num (s, typ): #String and type of the expected value; need: 'import re'
 	else: #positive int
 		return int(re.search(r'\d+', s).group(0))
 
+#Find if M serie (MSZ-EF/SF/FH or MFZ-KJ) (PAC-LV11 connection, to use smaller liquid pipe size)
+def get_M_series (s): #String, the type of the indoor unit; need 'import re'
+		if re.search(r'[M][SF][Z][-][ESFK][FHJ]', s) == None:
+			return('VRF')
+		else:
+			return('M')
+
+#M size correction (Because the total capacity in case of M series IU is eq or less than the number in the type designation)
+def M_size_corr (size): #Size is an integer; No information for EF-18
+	if size == 20 or size == 35 or size == 50:
+		return size - 5
+	elif size == 22 or size == 42:
+		return size - 2
+	else:
+		return size
+	
 #bend length correction
 def bend_len_corr (si, ty): #size of the connected indoor unit, and the type of the system
 	if ty == 'EP':
@@ -281,11 +318,36 @@ def bend_len_corr (si, ty): #size of the connected indoor unit, and the type of 
 		}
 		return P_dict[si]
 
-###Import data###
-import xml.etree.ElementTree as ET
-tree = ET.parse('ndtv.xml')
-root = tree.getroot()
+#Eqvivalent distance from the first joint; Leftchild, rightchild, pipe length
+def dist_1st_joint (lchild, rchild, eqlen): 
+	a = len(lchild) - 1
+	eqdis = [0] * (a + 1)
+	for i in range (2, a + 1):
+		eqdis[i] += eqlen[i]
+		if lchild[i] != -1:
+			eqdis[lchild[i]] += eqdis[i]
+		if rchild[i] != -1:
+			eqdis[rchild[i]] += eqdis[i]
+	return eqdis
 
+###Import data###
+print('Írd be az importálandó .xml fájl nevét, ami ebben a mappában van: ')
+while True:
+	try:
+		infil = str(input())
+		if len(infil) > 4:
+			if infil[len(infil)-4:len(infil)+1] != '.xml':
+				infil = infil + '.xml'
+		else:
+			infil = infil + '.xml'
+
+		import xml.etree.ElementTree as ET
+		tree = ET.parse(infil)
+		root = tree.getroot()
+		break
+	except FileNotFoundError:
+		print('Írd be helyesen az importálandó .xml fájl nevét, ami ebben a mappában van: ')
+	
 ###var
 elemtyp = list() #Outdoor / Indoor, Branch
 size = list() #The capacity of the units
@@ -294,9 +356,13 @@ parentid = list()
 piplen = list() #Pipe length before the unit #Expect outdoor unit
 c_piplen = list() #The equivalent pipe length
 numbend	= list() #Number of bent before the unit #Expect the outdoort unit
+height = list() #Height of the devices
 a = 0 #Where a = ID (a = NDT_ID - 1)
 systyp = '' #system type: P, HP, EP
-dbou_unit = 1
+iutyp = list() #VRF or M 
+dbou = 1 #Number of the outdoor unit
+minh = 0 #Minimum height by the IU-s
+maxh = 0 #Maximum height by the IU-s
 #lenA lenB lenC nenD lenE bendA bendB bendC bendD bendE #Tho outdoor units piping length
 
 for unit in root.iter('Unit'):
@@ -307,50 +373,61 @@ for unit in root.iter('Unit'):
 		piplen.append(0)
 		numbend.append(0)
 		systyp = (re.search(r'[-][E,H]?[P]', unit.get('ModelName')).group(0)).replace('-', '')
-		lenA = get_num(unit.get('PipeLengthA'),'float')
+		lenA = get_num(unit.get('PipeLengthA'),'float') #Because getnum change the ',' to '.' too
 		bendA = get_num(unit.get('BendA'), 'pint')
 		piplen.append(lenA)
 		numbend.append(bendA)
+		iutyp.append('VRF')
 		try:
 			lenB = get_num(unit.get('PipeLengthB'),'float'); lenB
 			bendB = get_num(unit.get('BendB'), 'pint')
-			piplen.append(lenB)
-			numbend.append(bendB)
-			dbou_unit += 1
+			dbou += 1
 			lenC = get_num(unit.get('PipeLengthC'),'float')
 			bendC = get_num(unit.get('BendC'), 'pint')
-			piplen.append(lenC)
-			numbend.append(bendC)
-			dbou_unit += 1
+			piplen[1] = lenC
+			numbend[1] = bendC
 			lenD = get_num(unit.get('PipeLengthD'),'float')
 			bendD = get_num(unit.get('BendD'), 'pint')
-			piplen.append(lenD)
-			numbend.append(bendD)
-			dbou_unit += 1
+			dbou += 1
 			lenE = get_num(unit.get('PipeLengthE'),'float')
 			bendE = get_num(unit.get('BendE'), 'pint')
-			piplen.append(lenE)
-			numbend.append(bendE)
+			piplen[1] =  lenE
+			numbend[1] = bendE
 		except AttributeError:
 			pass
+		height.append(get_num(unit.get('Height'), 'float'))
+		if dbou == 2:
+			height[0] = max(height[0], get_num(unit.get('Height2'), 'float'))
+		elif dbou == 3:
+			height[0] = max(height[0], get_num(unit.get('Height2'), 'float'), get_num(unit.get('Height3'), 'float'))
 	elif elemtyp[a] == 'Indoor':
-		size.append(get_num(unit.get('ModelName'),'pint'))
+		iutyp.append(get_M_series(unit.get('ModelName')))
+		if iutyp[a] == 'M': #Size correction for PAC-LV and M series
+			size.append(M_size_corr(get_num(unit.get('ModelName'),'pint')))
+		else:
+			size.append(get_num(unit.get('ModelName'),'pint'))
 		parentid.append(int(unit.get('ParentUnitID')) - 1)
 		piplen.append(get_num(unit.get('PipeLength'),'float'))
 		numbend.append(get_num(unit.get('Bend'),'pint'))
+		height.append(get_num(unit.get('Height'), 'float'))
+		if minh == 0: #To get an existing height value for initial condition to the min and max searching method
+			minh = get_num(unit.get('Height'), 'float')
+			maxh = get_num(unit.get('Height'), 'float')
 	elif elemtyp[a] == 'Branch': #Jump the frist branch pilength, and bend values, use lenA;;lenE and bendA;;bendE
 		size.append(0)
 		parentid.append(int(unit.get('ParentUnitID')) - 1)
+		iutyp.append('VRF')
 		if a != 1:
 			piplen.append(get_num(unit.get('PipeLength'),'float'))
 			numbend.append(get_num(unit.get('Bend'),'pint'))
+		height.append(get_num(unit.get('Height'), 'float'))
 	else:
 		print('Unknown device type in sequence (0;;unit): ' + str(a))#Err mess
 	bend_len_corr(200, 'EP')
 	c_piplen.append(float(numbend[a]*bend_len_corr(size[0], systyp) + piplen[a]))
 	a += 1
 a -= 1
-	
+
 ###Building the tree###
 ###var
 leftsize = [0] * (a + 1) #give the capacity connected on the 1st side 
@@ -376,6 +453,9 @@ for i in range(a, 0, -1):
 
 ###var
 pipdia = [[]] * (a + 1) #give diameter before of the equipment
+incdia = [False] * (a + 1) #Increased the liquid pipe diameter, because height limitation or exceeding the 40m
+bunit = 0 #The height of the base unit
+#act_paid  actual parendtID (by function height limit test)
 pipdia_len = [0, 0, 0, 0, 0, 0, 0, 0, 0] #6, 10 12, 16, 20, 22, 28, 35, 42 #To summarize the total pipe length group by diameter
 knowndia = { #known diameters to create pipdia_len vector
 		6: 0,
@@ -389,6 +469,19 @@ knowndia = { #known diameters to create pipdia_len vector
 		35: 7,
 		42: 8
 		}
+
+knowndia_inv = { #known diameters to create increase pipe diameter
+		0: 6,
+		1: 10,
+		2: 12,
+		3: 16,
+		4: 20,
+		5: 22,
+		6: 28,
+		7: 35,
+		8: 42
+		}
+
 num_join = 1 #Number of joints (int, but bool may enoug later?)
 
 for i in range (0, a + 1):
@@ -396,7 +489,10 @@ for i in range (0, a + 1):
 		pipdia[i] = [0, 0]
 		pass #later
 	elif elemtyp[i] == 'Indoor':
-		pipdia[i] = iu_branch(size[i], systyp)
+		if iutyp[i] == 'M': #M serie Pipe size
+			pipdia[i] = Miu_branch(size[i])
+		else: #VRF pipe size
+			pipdia[i] = iu_branch(size[i], systyp)
 	else:
 		if num_join == 1: #Not consecvent, other places the ID = 0 means OU, ID = 1 => branch
 			pipdia[i] = ou_branch(size[0], systyp)
@@ -404,28 +500,18 @@ for i in range (0, a + 1):
 			pipdia[i] = branch_branch(size[i], systyp)
 		num_join += 1
 
+#Get the distance for every element from the first joint 
+eqdist = dist_1st_joint(leftchild, rightchild, c_piplen)
 #In case of P250-300, EP250-300 if the max equvivalent distance between the outdoor unit and the indoor unit is equal or more then 90/40 m, the outdoor unit liquid pipe has to reselect
-if (size[0] == 300 or size[0] == 250) and (systyp == 'P' or systyp == 'EP'): 
-	sumlen = c_piplen
-	if size[0] == 300:
-		crit = 40
-	else:
-		crit = 90
-	#Mert bugos az NDT XML exportja, és az 1. joint távolsága néha fals (lenA-val redundánsan ugyan az kéne, hogy legyen)
-	if rightchild[1] != -1:
-		sumlen[rightchild[1]] += lenA
-	if leftchild[1] != -1:
-		sumlen[leftchild[1]] += lenA
-	for i in range(2, a + 1):
-		if rightchild[i] != -1:
-			sumlen[rightchild[i]] += c_piplen[i]
-		if leftchild[i] != -1:
-			sumlen[leftchild[i]] += c_piplen[i]
-		if sumlen[i] >= crit:
-			if size[0] == 300:
-				pipdia[1][0] = 12
-			else:
-				pipdia[1][0] = 12
+if  size[0] == 250 and (systyp == 'P' or systyp == 'EP'):
+	for i in eqdist:
+		if i + lenA + bendA * bend_len_corr(size[0], systyp) >= 90: #Mert bugos az NDT XML exportja, és az 1. joint távolsága néha fals (lenA-val redundánsan ugyan az kéne, hogy legyen)
+			pipdia[1][0] = 12
+			break
+if  size[0] == 300 and (systyp == 'P' or systyp == 'EP'):
+	for i in eqdist:
+		if i + lenA + bendA * bend_len_corr(size[0], systyp) >= 40:
+			pipdia[1][0] = 12
 			break
 
 #correction of the pipe diameter (if the upper one is smaller)
@@ -435,6 +521,38 @@ for i in range(1, a + 1):
 			pipdia[leftchild[i]][j] = pipdia[i][j]
 		elif pipdia[rightchild[i]][j] > pipdia[i][j] and elemtyp[rightchild[i]] != 'Indoor':
 			pipdia[rightchild[i]][j] = pipdia[i][j]
+
+#Correction the liquid pipe diameter, because the equvivalent distance from the first joint exceed 40m
+for i in range (2, a + 1):
+	if eqdist[i] > 40:
+		pipdia[i][0] = knowndia_inv[knowndia[pipdia[i][0]] + 1]
+		incdia[i] = True
+
+#Correction the liquid pipe diameter, because the height difference from the mase (IU) unit is more than 15 m (and no correction was because the 40 m)
+#First find the min and max value of the IU height
+for i in range (2, a + 1):
+	if elemtyp[i] == 'Indoor':
+		if height[i] < minh:
+			minh = height[i]
+		elif height[i] > maxh:
+			maxh = height[i]
+#Choose the base IU height
+if minh >= height[0]:
+	bunit = minh
+else:
+	bunit = maxh
+
+#Update the liquid pipe diameters
+for i in range (2, a + 1):
+	if elemtyp[i] == 'Indoor' and abs(height[i] - bunit) > 15 and incdia[i] == False:
+		pipdia[i][0] = knowndia_inv[knowndia[pipdia[i][0]] + 1]
+		incdia[i] = True
+		act_paid = parentid[i]
+		while abs(height[act_paid] - bunit) > 15 and act_paid != 0:
+			if incdia[act_paid] == False:
+				pipdia[act_paid][0] = knowndia_inv[knowndia[pipdia[act_paid][0]] + 1]
+				incdia[act_paid] = True
+			act_paid = parentid[act_paid]
 
 #pipelength
 for i in range(0, a + 1):
@@ -479,11 +597,29 @@ print()
 print('***End***')
 print()
 
+print(size)
 print("joints: " + str(joint_s))
 print('number of joints: ' + str(joint_num))
 print('pipe length 6, 10 12, 16, 20, 22, 28, 35, 42: ' + str(pipdia_len))
 
-print('****Test section starts here******')
+
+from openpyxl import Workbook
+from openpyxl import load_workbook
+infil = infil[0:len(infil)-4] + '_joint.xlsx' #Give a similar name to the output file
+try:
+	wb_load = load_workbook(filename = infil)
+	print('\n***\n A futás sikertelen.\n')
+	print(infil + ' néven létezik már fájl a mappában, ennek felülírására a programnak nincs jogosultsága. Kérlek nevezd vagy helyezd át a ' + infil +' nevű fájlt (vagy töröld), majd utána futtasd újra a kódot!')
+	time.sleep(10)
+	sys.exit()
+except FileNotFoundError:
+	print('Hello')
+	pass
+	
+wb = Workbook()
+ws = wb.active
+ws['A1'] = 1
+wb.save(infil)
 
 '''
 from openpyxl import Workbook
@@ -500,13 +636,16 @@ wb = load_workbook(filename = 'empty_book.xlsx')
 sheet_ranges = wb['Sheet']
 print(sheet_ranges['D18'].value)'''
 
+
+print('****Test section starts here******')
 print('****End******')
+#Find/ask the input xml file
 #bent -> pipe length in the export?
-#outdoor unit joint calculate
+#outdoor unit joint calculate #Bug: In case of two (or more?) OU one of them pipe doesent calculate properly (just the liquid pipe summarize in the excell export, but the gas pipe is not summarized)
 #calculate the special cases
 #create export file
 #Summarize more export files
 #Check from the NDT .xlsx export file
-#a (new)index error correction
 #-1 return value -> error message; + do not cause error
-#check the 1st bend xml bug
+#piplenA, piplenB.... create and calculate
+#reducer might have to use in case of PAC-LV (because of the PAC has D10 and D12 diameters)
